@@ -3,19 +3,24 @@ import json
 import requests
 import cloudscraper
 import time
+from groq import Groq
+import random
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
 #TEST_URL = input("Please provide test URL: ")
-TEST_URL = "https://zawodowe.edu.pl/egzamin/9b054e81-f49a-4252-aa1b-9f2926546e6b/"
+TEST_URL = "https://zawodowe.edu.pl/egzamin/d22c0b21-00fd-44b4-8042-4d2d084f033a/"
 CSRFMIDDLEWARE_TOKEN = input("Please provide crsf middleware token: ")
 SESSION_ID = input("Please provide session id: ")
 
 question_number = 1
 
 session = cloudscraper.Session()
+client = Groq(
+    api_key = os.getenv("GROQ_KEY")
+)
 
 session.headers.update({
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0",
@@ -48,46 +53,84 @@ while question_number <= 40:
 
     question_response = session.get(url = query_url)
     question_data = question_response.json()
+    print(question_data)
 
-    print(question_data["question"]["content"])
+    #print(question_data["question"]["content"])
     for answ in question_data["question"]["answers"]:
         print(answ['label'] + " " + answ['text'] + " " + str(answ['original_number']))
 
-    ai_response = requests.post(
-      url="https://openrouter.ai/api/v1/chat/completions",
-      headers={
-        "Authorization": f"Bearer {os.getenv('API_KEY')}",
-        "Content-Type": "application/json",
-      },
-      data=json.dumps({
-        "model": "nvidia/nemotron-3-super-120b-a12b:free",
-        "messages": [
+    # ai_response = requests.post(
+    #   url="https://openrouter.ai/api/v1/chat/completions",
+    #   headers={
+    #     "Authorization": f"Bearer {os.getenv('API_KEY')}",
+    #     "Content-Type": "application/json",
+    #   },
+    #   data=json.dumps({
+    #     "model": "nvidia/nemotron-3-super-120b-a12b:free",
+    #     "messages": [
+    #         {
+    #           "role": "user",
+    #           "content": f"Hi! Imagine that you are professional IT test solver. Solve this question for me, but make sure that you make no mistake:"
+    #                      f"This is the question: {question_data['question']['content']}"
+    #                      f"And these are the answers: {question_data['question']['answers']}"
+    #                      f"In the response, give me only one letter - the answer. Make sure to give the correct one."
+    #         }
+    #       ],
+    #     "reasoning": {"enabled": True}
+    #   })
+    # )
+
+    content_list = [
+                    {
+                        "type": "text",
+                        "text": f"Hi! Imagine that you are professional IT test solver. Solve this question for me, but make sure that you make no mistake:"
+                           f"This is the question: {question_data['question']['content']}"
+                           f"And these are the answers: {question_data['question']['answers']}"
+                           f"In the response, give me only one letter - the answer. Make sure to give the correct one."
+                           f"If you don't have enough information - for example the question mentions a video, but "
+                           f"you don't see one, give random answer. RESPONSE ONLY WITH ONE CHARACTER - THE CORRECT ANSWER LETTER, WITHOUT ANYTHING ELSE, EVEN WITHOUT A DOT!!!!"
+                    }
+                    #if has_images then add image to request
+    ]
+
+    if question_data["question"]["has_images"]:
+        content_list.append(
             {
-              "role": "user",
-              "content": f"Hi! Imagine that you are professional IT test solver. Solve this question for me, but make sure that you make no mistake:"
-                         f"This is the question: {question_data['question']['content']}"
-                         f"And these are the answers: {question_data['question']['answers']}"
-                         f"In the response, give me only one letter - the answer. Make sure to give the correct one."
+                "type": "image_url",
+                "image_url": { "url": f"https://zawodowe.edu.pl{question_data['question']['image']}" }
             }
-          ],
-        "reasoning": {"enabled": True}
-      })
+        )
+
+    print(content_list)
+
+    ai_response = client.chat.completions.create(
+        model="meta-llama/llama-4-scout-17b-16e-instruct",
+        messages=[
+            {
+                "role": "user",
+                "content": content_list
+            }
+        ]
     )
 
-    res_json = ai_response.json()
 
-    if "choices" not in res_json:
+    if not ai_response.choices:
         print(f"BŁĄD API na pytaniu {question_number}!")
-        print("Treść błędu:", res_json)
+        print("Treść błędu:", ai_response)
         time.sleep(10)
         continue
 
-    answer = res_json["choices"][0]["message"]["content"].strip()
+    answer = ai_response.choices[0].message.content.strip()[0]
 
     correctAnswerNumber = None
     for answ in question_data["question"]["answers"]:
         if(answ['label'] == answer):
             correctAnswerNumber = answ['original_number']
+
+    if(correctAnswerNumber is None):
+        print("Znowu się coś zjebało")
+        correctAnswerNumber = random.randint(1, 4) #strzela jak się coś zjebie. Ta llama to wielce nieposłuszny model..
+
 
     print("Poprawna odpowiedź: " + answer + ", jest to odpowiedź o numerze " + str(correctAnswerNumber))
 
