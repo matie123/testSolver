@@ -5,15 +5,34 @@ import cloudscraper
 import time
 from groq import Groq
 import random
-
+from bs4 import BeautifulSoup
+import sqlite3
 from dotenv import load_dotenv
+
+
+
+def get_exam_id():
+    conn = sqlite3.connect(os.getenv("PATH_TO_LOCALSTORAGE"))
+    cursor = conn.cursor()
+    cursor.execute("SELECT key FROM data WHERE key LIKE 'exam%' LIMIT 1")
+    key = cursor.fetchone()
+    conn.close()
+    return str(key[0]).removesuffix("_questions").removeprefix("exam_")
+
+def get_session_id():
+    conn = sqlite3.connect(os.getenv("PATH_TO_COOKIES"))
+    cursor = conn.cursor()
+    cursor.execute("SELECT value FROM moz_cookies WHERE host LIKE 'zawodowe.edu.pl' AND name LIKE 'sessionid'")
+    key = cursor.fetchone()
+    conn.close()
+    return str(key[0])
 
 load_dotenv()
 
 #TEST_URL = input("Please provide test URL: ")
-TEST_URL = "https://zawodowe.edu.pl/egzamin/d22c0b21-00fd-44b4-8042-4d2d084f033a/"
+TEST_URL = f"https://zawodowe.edu.pl/egzamin/{get_exam_id()}/"
 CSRFMIDDLEWARE_TOKEN = input("Please provide crsf middleware token: ")
-SESSION_ID = input("Please provide session id: ")
+SESSION_ID = get_session_id()
 
 question_number = 1
 
@@ -37,11 +56,7 @@ session.cookies.set(
     SESSION_ID,
     domain = "zawodowe.edu.pl"
 )
-# session.cookies.set(
-#     'cf_clearance',
-#     CF_CLEARANCE,
-#     domain = "zawodowe.edu.pl"
-# )
+
 
 while question_number <= 40:
     time.sleep(2)
@@ -53,32 +68,12 @@ while question_number <= 40:
 
     question_response = session.get(url = query_url)
     question_data = question_response.json()
-    print(question_data)
+    print(question_data["question"]["content"]) # treść pytania, response -> question(słownik) -> content,answers,has_image itd
 
     #print(question_data["question"]["content"])
     for answ in question_data["question"]["answers"]:
         print(answ['label'] + " " + answ['text'] + " " + str(answ['original_number']))
 
-    # ai_response = requests.post(
-    #   url="https://openrouter.ai/api/v1/chat/completions",
-    #   headers={
-    #     "Authorization": f"Bearer {os.getenv('API_KEY')}",
-    #     "Content-Type": "application/json",
-    #   },
-    #   data=json.dumps({
-    #     "model": "nvidia/nemotron-3-super-120b-a12b:free",
-    #     "messages": [
-    #         {
-    #           "role": "user",
-    #           "content": f"Hi! Imagine that you are professional IT test solver. Solve this question for me, but make sure that you make no mistake:"
-    #                      f"This is the question: {question_data['question']['content']}"
-    #                      f"And these are the answers: {question_data['question']['answers']}"
-    #                      f"In the response, give me only one letter - the answer. Make sure to give the correct one."
-    #         }
-    #       ],
-    #     "reasoning": {"enabled": True}
-    #   })
-    # )
 
     content_list = [
                     {
@@ -100,8 +95,6 @@ while question_number <= 40:
                 "image_url": { "url": f"https://zawodowe.edu.pl{question_data['question']['image']}" }
             }
         )
-
-    print(content_list)
 
     ai_response = client.chat.completions.create(
         model="meta-llama/llama-4-scout-17b-16e-instruct",
