@@ -15,16 +15,23 @@ import asyncio
 import cloudscraper
 from groq import Groq
 from dotenv import load_dotenv
-import websockets
+import websocket
 
 
 from modules.gather_info import get_csrf_token
 from modules.create_prompt import create_content_list, clean_text
-from modules.exam_manager import start_exam
+from modules.exam_manager import start_exam, connect_websocket, send_websocket, send_websocket_safe
 
 
 def calc_solving_time():
     return random.randint(60*15, 60*25)
+
+def calc_question_time():
+    return random.randint(15, 30)
+
+def ws_connect():
+    ws = connect_websocket(MAIN_DOMAIN, exam_id, session.cookies.get("sessionid"), session.cookies.get("cf_clearance"))
+    return ws
 
 TIME_START = time.time()
 
@@ -53,6 +60,10 @@ csrf_token = get_csrf_token(session, EXAM_URL)
 
 print(f"Link do egzaminu: {EXAM_URL}")
 
+#WEBSOCKET
+ws = ws_connect()
+websocket_events = [] #Tutej będzie message q_opened, q_answered
+
 if csrf_token:
     session.cookies.set(
         'csrftoken',
@@ -67,6 +78,16 @@ while question_number <= 40:
         query_url = f"{EXAM_URL}pytanie/{question_number}"
     else:
         query_url = f"{EXAM_URL}/pytanie/{question_number}"
+
+    question_start = time.time()
+
+    websocket_events.append(
+        {
+            "t": int(time.time()*1000),
+            "e": "question_opened",
+            "q": question_number
+        }
+    )
 
     question_response = session.get(url=query_url)
 
@@ -116,6 +137,18 @@ while question_number <= 40:
 
     print("Poprawna odpowiedź: " + answer + ", jest to odpowiedź o numerze " + str(correct_answer_number))
 
+    time.sleep(calc_question_time() - (time.time() - question_start))
+
+    websocket_events.append(
+        {
+            "t": int(time.time() * 1000),
+            "e": "question_answered",
+            "q": question_number,
+            "a": correct_answer_number
+        }
+    )
+
+
     sendQuery = session.post(
         url=f"{query_url}/odpowiedz/",
         data={
@@ -130,19 +163,24 @@ while question_number <= 40:
             "X-Requested-With": "XMLHttpRequest"
         }
     )
-    # print(dir(sendQuery))
-    print(str(session.headers) + "\n")
-    print(str(session.cookies) + "\n")
+    if not (send_websocket_safe(ws, MAIN_DOMAIN, websocket_events, exam_id, session.cookies.get('sessionid'), session.cookies.get('cf_clearance'))):
+        ws = ws_connect()
+
+    websocket_events = []
+
     print(str(sendQuery.status_code) + "\n")
     try:
         print("Odpowiedź serwera:", sendQuery.json())
     except:
         print("Odpowiedź nie jest dżejsonem:", sendQuery.text)
     question_number += 1
-    if question_number % 20 == 0:
-        time.sleep(60)
 
-time.sleep(calc_solving_time()-(time.time()-TIME_START)) #temporary to make test solve time more believable
+time.sleep(5)
+try:
+    ws.close()
+    print("Websocket ubity")
+except:
+    print("Coś jest nie ten tego z websocketem??")
 
 # Send end test request
 end_test = session.post(
