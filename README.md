@@ -5,5 +5,5 @@ Who would want to spend so much time solving test's that i doubt anyone smarter 
 Would be able to pass? Yeah, no one. Anyway, for now I'll keep it for myself, as I am the only person\
 That could achieve AI-high score without teacher's suspicion. Maybe one day I'll add an option\
 To set desired score so some of the questions would be answered randomly purposely.\
-Oh and remember:\
+### Oh and remember: 
 ## ***Власть рождает паразитов. Да здравствует анархия!***
