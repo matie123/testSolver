@@ -1,5 +1,4 @@
 import sqlite3
-import os
 from bs4 import BeautifulSoup
 
 def get_csrf_token(session, url):
@@ -7,14 +6,14 @@ def get_csrf_token(session, url):
     soup = BeautifulSoup(landing_page.text, 'html.parser')
     csrf_tag = soup.find('div', {'id': 'examContainer'})
 
-    if (csrf_tag):
+    if csrf_tag:
         token = csrf_tag['data-csrf-token']
         print("CSRF token found in div!")
         return token
     else:
         csrf_tag = soup.find('input', {'name': 'csrfmiddlewaretoken'})
 
-        if(csrf_tag):
+        if csrf_tag:
             token = csrf_tag['value']
             print("CSRF token found in input!")
             return token

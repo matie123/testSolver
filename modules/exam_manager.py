@@ -1,6 +1,6 @@
 import cloudscraper
 
-from modules.gather_info import *
+from modules.gather_info import get_session_id, get_csrf_token, get_cf_clearance
 
 def start_exam(session: cloudscraper.Session, path, domain):
     """
