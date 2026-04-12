@@ -1,6 +1,6 @@
 #TEST SOLVER BY MATIE123 09.04.26 - 12.04.26
 #This is test solver for funny exams that my teacher wants me to solve 10 each week
-#Assuming that each exam takes about 30 mins, times 10 this means about 5 hrs each week!
+#Assuming that each exam takes about 20 mins, times 10 this means about 3 hrs each week!
 #Who would want to spend so much time solving test's that i doubt anyone smarter than an ape
 #Would be able to pass? Yeah, no one. Anyway, for now I'll keep it for myself, as I am the only person
 #That could achieve AI-high score without teacher's suspicion. Maybe one day I'll add an option
@@ -8,108 +8,30 @@
 #Oh and remember:
 #Власть рождает паразитов. Да здравствует анархия!
 
-import os
-import json
-import requests
-import cloudscraper
 import time
-from Tools.demo.spreadsheet import cellname
+import os
+import cloudscraper
 from groq import Groq
 import random
-from bs4 import BeautifulSoup
-import sqlite3
 from dotenv import load_dotenv
-import html
+import websockets
+import asyncio
 
-SYSTEM_MESSAGE = (
-    "Jesteś wybitnym ekspertem IT, specjalizującym się w polskich egzaminach zawodowych "
-    "(INF.02, INF.03, E.12, E.14). Twoim zadaniem jest bezbłędne rozwiązywanie testów. "
-    "Zawsze analizuj każde pytanie krok po kroku, eliminując błędne odpowiedzi."
-)
-
-def clean_text(text):
-    if not text:
-        return ""
-    text = html.unescape(html.unescape(text))
-    text = text.replace('”', '"').replace('„', '"').replace('’', "'")
-    text = text.replace('\xa0', ' ')
-    return text.strip()
-
-def create_content_list(question_data):
-    raw_content = question_data['question']['content']
-    clean_content = clean_text(raw_content)
-
-    clean_answers = []
-    for answ in question_data["question"]["answers"]:
-        clean_answers.append(
-            {
-                "label": answ["label"],
-                "text": clean_text(answ["text"])
-            }
-        )
-
-    content_list = [
-        {
-            "type": "text",
-            "text": f"PRZEANALIZUJ PYTANIE I WYBIERZ POPRAWNĄ ODPOWIEDŹ.\n\n"
-                    f"Pytanie: {clean_content}\n"
-                    f"Odpowiedzi:\n{clean_answers}\n\n"
-                    "INSTRUKCJA:\n"
-                    "1. W sekcji 'Analiza:' krótko uzasadnij wybór.\n"
-                    "2. W sekcji 'Wynik:' podaj tylko i wyłącznie jedną literę (A, B, C lub D).\n"
-                    "Pamiętaj: Jeśli pytanie dotyczy grafiki, lub filmu którego nie widzisz, opieraj się na tekście, w ostateczności wylosuj odpowiedź."
-        }
-    ]
-
-    if question_data["question"]["has_images"]:
-        content_list.append(
-            {
-                "type": "image_url",
-                "image_url": {"url": f"https://zawodowe.edu.pl{question_data['question']['image']}"}
-            }
-        )
-    return content_list
+from modules.gather_info import *
+from modules.create_prompt import *
+from modules.exam_manager import *
 
 
-def get_exam_id():
-    conn = sqlite3.connect(os.getenv("PATH_TO_LOCALSTORAGE"))
-    cursor = conn.cursor()
-    cursor.execute("SELECT key FROM data WHERE key LIKE 'exam%'")
-    key = cursor.fetchall()[-1]
-    conn.close()
-    print(str(key[0]).removesuffix("_questions").removeprefix("exam_")) #For debug reasons
-    return str(key[0]).removesuffix("_questions").removeprefix("exam_")
+def calc_solving_time():
+    return random.randint(60*15, 60*25)
 
-
-def get_session_id():
-    conn = sqlite3.connect(os.getenv("PATH_TO_COOKIES"))
-    cursor = conn.cursor()
-    cursor.execute("SELECT value FROM moz_cookies WHERE host LIKE 'zawodowe.edu.pl' AND name LIKE 'sessionid'")
-    key = cursor.fetchone()
-    conn.close()
-    return str(key[0])
-
-
-def get_csrf_token(session):
-    landing_page = session.get(TEST_URL)
-    soup = BeautifulSoup(landing_page.text, 'html.parser')
-    csrf_tag = soup.find('div', {'id': 'examContainer'})
-
-    if (csrf_tag):
-        token = csrf_tag['data-csrf-token']
-        print("CSRF token found!")
-        return token
-    else:
-        return input(
-            "Token not found!: Please provide crsf middleware token: ")  # Jeśli to się odpala to prawdopodobnie data token jest inny aniżeli ten drugi
-
+TIME_START = time.time()
 
 load_dotenv()
 
-# TEST_URL = input("Please provide test URL: ")
-TEST_URL = f"https://zawodowe.edu.pl/egzamin/{get_exam_id()}/"
-# CSRFMIDDLEWARE_TOKEN = input("Please provide crsf middleware token: ")
-SESSION_ID = get_session_id()
+PATH_TO_LOCAL_STORAGE = os.getenv("PATH_TO_LOCALSTORAGE")
+PATH_TO_COOKIES = os.getenv("PATH_TO_COOKIES")
+MAIN_DOMAIN = os.getenv("MAIN_DOMAIN")
 
 question_number = 1
 
@@ -123,29 +45,25 @@ session.headers.update({
     "Accept": "*/*"
 })
 
+exam_id = start_exam(session, PATH_TO_COOKIES, MAIN_DOMAIN)
 
-session.cookies.set(
-    'sessionid',
-    SESSION_ID,
-    domain="zawodowe.edu.pl"
-)
+exam_url = f"https://{MAIN_DOMAIN}/egzamin/{exam_id}/"
+csrf_token = get_csrf_token(session, exam_url)
 
-CSRFMIDDLEWARE_TOKEN = get_csrf_token(session)
-
-if(CSRFMIDDLEWARE_TOKEN):
+if csrf_token:
     session.cookies.set(
         'csrftoken',
-        CSRFMIDDLEWARE_TOKEN,
-        domain="zawodowe.edu.pl"
+        csrf_token,
+        domain=f"{MAIN_DOMAIN}"
     )
 
 while question_number <= 40:
     time.sleep(2)
     query_url = ""
-    if (TEST_URL.endswith("/")):
-        query_url = f"{TEST_URL}pytanie/{question_number}"
+    if exam_url.endswith("/"):
+        query_url = f"{exam_url}pytanie/{question_number}"
     else:
-        query_url = f"{TEST_URL}/pytanie/{question_number}"
+        query_url = f"{exam_url}/pytanie/{question_number}"
 
     question_response = session.get(url=query_url)
 
@@ -158,20 +76,11 @@ while question_number <= 40:
     for answ in question_data["question"]["answers"]:
         print(answ['label'] + " " + clean_text(answ['text']) + " " + str(answ['original_number']))
 
-    content_list = create_content_list(question_data)
+    content_list = create_content_list(question_data, MAIN_DOMAIN)
 
     ai_response = client.chat.completions.create(
         model="meta-llama/llama-4-scout-17b-16e-instruct",
-        messages=[
-            {
-                "role" : "system",
-                "content": SYSTEM_MESSAGE
-            },
-            {
-                "role": "user",
-                "content": content_list
-            }
-        ]
+        messages= content_list
     )
 
     full_response = ai_response.choices[0].message.content
@@ -208,12 +117,12 @@ while question_number <= 40:
         url=f"{query_url}/odpowiedz/",
         data={
             "answer": correctAnswerNumber,
-            "csrfmiddlewaretoken": CSRFMIDDLEWARE_TOKEN
+            "csrfmiddlewaretoken": csrf_token
         },
         headers={
-            "Referer": TEST_URL,
-            "X-CSRFToken": f"{CSRFMIDDLEWARE_TOKEN}",
-            "Origin": "https://zawodowe.edu.pl",
+            "Referer": exam_url,
+            "X-CSRFToken": f"{csrf_token}",
+            "Origin": f"https://{MAIN_DOMAIN}",
             "Accept": "application/json, text/javascript, */*; q=0.01",
             "X-Requested-With": "XMLHttpRequest"
         }
@@ -230,16 +139,18 @@ while question_number <= 40:
     if (question_number % 20 == 0):
         time.sleep(60)
 
+time.sleep(calc_solving_time()-(time.time()-TIME_START)) #temporary to make test solve time more believable
+
 # Send end test request
 end_test = session.post(
-    url=f"{TEST_URL}zakoncz/",
+    url=f"{exam_url}zakoncz/",
     data={
-        "csrfmiddlewaretoken": CSRFMIDDLEWARE_TOKEN
+        "csrfmiddlewaretoken": csrf_token
     },
     headers={
-        "Referer": TEST_URL,
-        "X-CSRFToken": f"{CSRFMIDDLEWARE_TOKEN}",
-        "Origin": "https://zawodowe.edu.pl",
+        "Referer": exam_url,
+        "X-CSRFToken": f"{csrf_token}",
+        "Origin": f"https://{MAIN_DOMAIN}",
         "Accept": "application/json, text/javascript, */*; q=0.01",
         "X-Requested-With": "XMLHttpRequest"
     }
