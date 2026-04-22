@@ -57,6 +57,7 @@ exam_id = start_exam(session, PATH_TO_COOKIES, MAIN_DOMAIN)
 
 EXAM_URL = f"https://{MAIN_DOMAIN}/egzamin/{exam_id}/"
 csrf_token = get_csrf_token(session, EXAM_URL)
+print(f"CSRF_TOKEN: {csrf_token}")
 
 print(f"Link do egzaminu: {EXAM_URL}")
 
