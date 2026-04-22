@@ -20,14 +20,14 @@ import websocket
 
 from modules.gather_info import get_csrf_token
 from modules.create_prompt import create_content_list, clean_text
-from modules.exam_manager import start_exam, connect_websocket, send_websocket, send_websocket_safe
+from modules.exam_manager import start_exam, connect_websocket, send_websocket, send_websocket_safe, random_focus_lost
 
 
 def calc_solving_time():
     return random.randint(60*15, 60*25)
 
 def calc_question_time():
-    return random.randint(15, 30)
+    return random.randint(10, 20)
 
 def ws_connect():
     ws = connect_websocket(MAIN_DOMAIN, exam_id, session.cookies.get("sessionid"), session.cookies.get("cf_clearance"))
@@ -114,7 +114,7 @@ while question_number <= 40:
         answer = full_response.split("Wynik:")[1].strip()[0].upper()
         print(answer)
     else:
-        import re
+        import re #Zajebista sprawa z importem w trakcie działania.
         match = re.search(r'\b[A-D]\b', full_response)
         answer = match.group(0) if match else "A"
 
@@ -149,6 +149,9 @@ while question_number <= 40:
         }
     )
 
+    #RANDOM FOCUS LOST / OTHER QUESTION OPENDED. TODO
+
+    websocket_events = random_focus_lost(websocket_events)
 
     sendQuery = session.post(
         url=f"{query_url}/odpowiedz/",
@@ -178,12 +181,13 @@ while question_number <= 40:
 
 time.sleep(5)
 try:
-    ws.close()
+    ws.close() #Szczerze to nie wiem, czy to potrzebne, ale na wszelki wypadek lepiej ubić, cn?
+    #W końcu głupio by było, żeby wisiało jakieś niezamknięte połączenie
     print("Websocket ubity")
 except:
     print("Coś jest nie ten tego z websocketem??")
 
-# Send end test request
+
 end_test = session.post(
     url=f"{EXAM_URL}zakoncz/",
     data={

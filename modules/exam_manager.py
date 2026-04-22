@@ -1,5 +1,7 @@
 import json
+import random
 import ssl
+import time
 
 import cloudscraper
 from modules.gather_info import get_session_id, get_csrf_token, get_cf_clearance
@@ -86,6 +88,30 @@ def send_websocket_safe(ws, domain, data, exam_id, session_id, cf_clearance):
     try:
         send_websocket(ws, data)
         return True
-    except (websocket.WebSocketConnectionClosedException, ssl.SSLEOFError):
+    except (websocket.WebSocketConnectionClosedException, ssl.SSLEOFError, ConnectionAbortedError):
         print("Połączenie przerwane. Próbuję połączyć ponownie...")
         return False
+
+# RANDOM FOCUS LOST
+def random_focus_lost(websocket_events: list):
+    if(random.randint(1, 30) == 1):
+        websocket_events.append(
+            {
+                "t": int(time.time() * 1000),
+                "e": "focus_lost"
+            }
+        )
+        wait_time = random.randint(2000, 14000) #In millis
+        time.sleep(int(wait_time/1000))
+        websocket_events.append(
+            {
+                "t": int(time.time() * 1000)+wait_time,
+                "e": "focus_regained",
+                "away": wait_time
+            }
+        )
+    return websocket_events
+
+# RANDOM QUESTION OPEN
+def random_question_open(websocket_events: list):
+    pass #todo
