@@ -1,11 +1,4 @@
 #TEST SOLVER BY MATIE123 09.04.26 - 12.04.26
-# This is test solver for funny exams that my teacher wants me to solve 10 each week
-# Assuming that each exam takes about 20 mins, times 10 this means about 3 hrs each week!
-# Who would want to spend so much time solving test's that I doubt anyone smarter than an ape
-# Would be able to pass? Yeah, no one. Anyway, for now I'll keep it for myself, as I am the only person
-# That could achieve AI-high score without suspicion. Maybe one day I'll add an option
-# To set desired score so some of the questions would be answered randomly purposely.
-#Oh, and remember:
 #Власть рождает паразитов. Да здравствует анархия!
 
 import time
@@ -20,7 +13,7 @@ import websocket
 
 from modules.gather_info import get_csrf_token
 from modules.create_prompt import create_content_list, clean_text
-from modules.exam_manager import start_exam, connect_websocket, send_websocket, send_websocket_safe, random_focus_lost
+from modules.exam_manager import start_exam, connect_websocket, send_websocket, send_websocket_safe, random_focus_lost, random_question_open
 
 
 def calc_solving_time():
@@ -152,6 +145,7 @@ while question_number <= 40:
     #RANDOM FOCUS LOST / OTHER QUESTION OPENDED. TODO
 
     websocket_events = random_focus_lost(websocket_events)
+    websocket_events = random_question_open(websocket_events, question_number)
 
     sendQuery = session.post(
         url=f"{query_url}/odpowiedz/",
@@ -182,7 +176,7 @@ while question_number <= 40:
 time.sleep(5)
 try:
     ws.close() #Szczerze to nie wiem, czy to potrzebne, ale na wszelki wypadek lepiej ubić, cn?
-    #W końcu głupio by było, żeby wisiało jakieś niezamknięte połączenie
+    #W końcu głupio by było, żeby wisiało jakieś niezamknięte połączenie. W sumie to nic się nie stanie. Ale i tak zamykam. BO MOGĘ
     print("Websocket ubity")
 except:
     print("Coś jest nie ten tego z websocketem??")

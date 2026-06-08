@@ -105,7 +105,7 @@ def random_focus_lost(websocket_events: list):
         time.sleep(int(wait_time/1000))
         websocket_events.append(
             {
-                "t": int(time.time() * 1000)+wait_time,
+                "t": int(time.time() * 1000),
                 "e": "focus_regained",
                 "away": wait_time
             }
@@ -113,5 +113,22 @@ def random_focus_lost(websocket_events: list):
     return websocket_events
 
 # RANDOM QUESTION OPEN
-def random_question_open(websocket_events: list):
-    pass #todo
+def random_question_open(websocket_events: list, question_number: int):
+    if(random.randint(1, 20) == 1):
+        websocket_events.append(
+            {
+                "t": int(time.time()*1000),
+                "e": "question_opened",
+                "q": random.randint(1, 40)
+            }
+        )
+        wait_time = random.randint(2000, 14000)
+        time.sleep(int(wait_time/1000))
+        websocket_events.append(
+            {
+                "t": int(time.time()*1000),
+                "e": "question_opened",
+                "q": question_number
+            }
+        )
+        return websocket_events
